@@ -2,7 +2,7 @@ const express = require('express');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const { body, validationResult } = require('express-validator');
-const auth = require('../middleware/auth');
+const { auth } = require('../middleware/auth');
 
 const router = express.Router();
 
@@ -162,4 +162,4 @@ router.post('/logout', auth, async (req, res) => {
   }
 });
 
-module.exports = router;
+module.exports = router; // Make sure this is router, not an object

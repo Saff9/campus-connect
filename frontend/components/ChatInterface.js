@@ -19,50 +19,30 @@ export default function ChatInterface({ selectedGroup, selectedChannel, onGroupS
   const [message, setMessage] = useState('')
   const [messages, setMessages] = useState([])
   const messagesEndRef = useRef(null)
-  const queryClient = useQueryClient()
 
   // Fetch messages for selected channel
   const { data: channelMessages = [] } = useQuery({
-    queryKey: ['messages', selectedGroup?._id, selectedChannel],
+    queryKey: ['messages', selectedGroup?.id, selectedChannel],
     queryFn: async () => {
       if (!selectedGroup || !selectedChannel) return []
       
-      const { data } = await api.get(
-        `/messages/${selectedGroup._id}/${selectedChannel}`
-      )
-      return data.messages
+      try {
+        const { data } = await api.get(
+          `/messages/${selectedGroup.id}/${selectedChannel}`
+        )
+        return data.messages || []
+      } catch (error) {
+        console.error('Error fetching messages:', error)
+        return []
+      }
     },
     enabled: !!selectedGroup && !!selectedChannel,
+    refetchInterval: 5000, // Poll every 5 seconds for new messages
   })
 
   useEffect(() => {
     setMessages(channelMessages)
   }, [channelMessages])
-
-  // Socket event listeners
-  useEffect(() => {
-    if (!socket || !selectedGroup || !selectedChannel) return
-
-    const handleNewMessage = (newMessage) => {
-      if (newMessage.group === selectedGroup._id && newMessage.channel === selectedChannel) {
-        setMessages(prev => [...prev, newMessage])
-      }
-    }
-
-    const handleMessageUpdate = (updatedMessage) => {
-      setMessages(prev => prev.map(msg => 
-        msg._id === updatedMessage._id ? updatedMessage : msg
-      ))
-    }
-
-    socket.on('new_message', handleNewMessage)
-    socket.on('message_updated', handleMessageUpdate)
-
-    return () => {
-      socket.off('new_message', handleNewMessage)
-      socket.off('message_updated', handleMessageUpdate)
-    }
-  }, [socket, selectedGroup, selectedChannel])
 
   // Scroll to bottom when messages change
   useEffect(() => {
@@ -79,7 +59,8 @@ export default function ChatInterface({ selectedGroup, selectedChannel, onGroupS
         socket.emit('send_message', sentMessage)
       }
       setMessage('')
-      queryClient.invalidateQueries(['messages', selectedGroup?._id, selectedChannel])
+      // Optimistically update the messages
+      setMessages(prev => [...prev, sentMessage])
     },
   })
 
@@ -89,7 +70,7 @@ export default function ChatInterface({ selectedGroup, selectedChannel, onGroupS
 
     sendMessageMutation.mutate({
       content: { text: message },
-      group: selectedGroup._id,
+      group: selectedGroup.id,
       channel: selectedChannel,
       type: 'text'
     })
@@ -148,7 +129,7 @@ export default function ChatInterface({ selectedGroup, selectedChannel, onGroupS
       <div className="flex-1 overflow-y-auto bg-gray-50 dark:bg-gray-800 p-6">
         <div className="space-y-4">
           {messages.map((msg) => (
-            <MessageBubble key={msg._id} message={msg} />
+            <MessageBubble key={msg.id} message={msg} />
           ))}
           <div ref={messagesEndRef} />
         </div>
@@ -195,7 +176,7 @@ export default function ChatInterface({ selectedGroup, selectedChannel, onGroupS
 
 function MessageBubble({ message }) {
   const { user } = useAuth()
-  const isOwnMessage = message.sender._id === user?.id
+  const isOwnMessage = message.sender.id === user?.id
 
   return (
     <div className={`flex ${isOwnMessage ? 'justify-end' : 'justify-start'}`}>
@@ -205,7 +186,9 @@ function MessageBubble({ message }) {
           : 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-bl-none border border-gray-200 dark:border-gray-600'
       }`}>
         {!isOwnMessage && (
-          <p className="text-sm font-medium mb-1">{message.sender.firstName}</p>
+          <p className="text-sm font-medium mb-1">
+            {message.sender.firstName} {message.sender.lastName}
+          </p>
         )}
         <p className="text-sm">{message.content.text}</p>
         <p className={`text-xs mt-1 ${

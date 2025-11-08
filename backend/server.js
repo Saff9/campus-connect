@@ -5,7 +5,6 @@ const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const socketIO = require('socket.io');
 const http = require('http');
-const connectDB = require('./render-setup');
 require('dotenv').config();
 
 const app = express();
@@ -47,9 +46,16 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 // Database connection
-connectDB();
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/campusconnect';
 
-// Routes
+mongoose.connect(MONGODB_URI, {
+  useNewUrlParser: true,
+  useUnifiedTopology: true,
+})
+.then(() => console.log('✅ MongoDB connected successfully'))
+.catch(err => console.error('❌ MongoDB connection error:', err));
+
+// Import and use routes - FIXED: Ensure we're requiring router objects
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/users', require('./routes/users'));
 app.use('/api/groups', require('./routes/groups'));
@@ -66,11 +72,27 @@ const io = socketIO(server, {
   pingInterval: 25000
 });
 
-const { setupSocketHandlers } = require('./sockets/socketHandlers');
-setupSocketHandlers(io);
+// Basic socket setup
+io.on('connection', (socket) => {
+  console.log(`🔌 User connected: ${socket.id}`);
 
-// Error handling middleware
-app.use(require('./middleware/errorHandler'));
+  socket.on('join_groups', (groupIds) => {
+    if (Array.isArray(groupIds)) {
+      groupIds.forEach(groupId => {
+        socket.join(groupId.toString());
+      });
+    }
+  });
+
+  socket.on('send_message', (message) => {
+    // Broadcast message to appropriate room
+    socket.broadcast.emit('new_message', message);
+  });
+
+  socket.on('disconnect', () => {
+    console.log(`🔌 User disconnected: ${socket.id}`);
+  });
+});
 
 // Enhanced health check endpoint
 app.get('/api/health', (req, res) => {
@@ -103,10 +125,20 @@ app.use('*', (req, res) => {
   });
 });
 
+// Error handling middleware
+app.use((err, req, res, next) => {
+  console.error('🔴 Error:', err.stack);
+  res.status(500).json({
+    error: 'Internal Server Error',
+    message: 'Something went wrong!'
+  });
+});
+
 const PORT = process.env.PORT || 5000;
 
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`📚 CampusConnect Backend API Active`);
   console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`🔗 Health check: http://localhost:${PORT}/api/health`);
 });

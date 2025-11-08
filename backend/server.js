@@ -25,11 +25,9 @@ app.use(cors(corsOptions));
 
 // Enhanced rate limiting
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 1000, // increased limit for production
-  message: {
-    error: 'Too many requests from this IP, please try again later.'
-  },
+  windowMs: 15 * 60 * 1000,
+  max: 1000,
+  message: { error: 'Too many requests from this IP' },
   standardHeaders: true,
   legacyHeaders: false,
 });
@@ -41,21 +39,50 @@ app.use(helmet({
   crossOriginResourcePolicy: { policy: "cross-origin" }
 }));
 
-// Body parsing middleware with increased limits for file uploads
+// Body parsing middleware
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
-// Database connection
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/campusconnect';
+// ✅ IMPROVED MongoDB Connection with Atlas support
+const connectDB = async () => {
+  try {
+    // Use environment variable for MongoDB URI
+    const MONGODB_URI = process.env.MONGODB_URI;
+    
+    if (!MONGODB_URI) {
+      console.error('❌ MONGODB_URI environment variable is not set');
+      console.log('💡 Please set MONGODB_URI in your environment variables');
+      console.log('💡 For local development, you can use: mongodb://localhost:27017/campusconnect');
+      process.exit(1);
+    }
 
-mongoose.connect(MONGODB_URI, {
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
-})
-.then(() => console.log('✅ MongoDB connected successfully'))
-.catch(err => console.error('❌ MongoDB connection error:', err));
+    console.log('🔗 Attempting to connect to MongoDB...');
+    
+    const conn = await mongoose.connect(MONGODB_URI, {
+      useNewUrlParser: true,
+      useUnifiedTopology: true,
+      serverSelectionTimeoutMS: 30000, // 30 seconds
+      socketTimeoutMS: 45000, // 45 seconds
+    });
 
-// Import and use routes - FIXED: Ensure we're requiring router objects
+    console.log(`✅ MongoDB Connected: ${conn.connection.host}`);
+    console.log(`📊 Database: ${conn.connection.name}`);
+    
+  } catch (error) {
+    console.error('❌ MongoDB connection error:', error.message);
+    console.log('💡 Troubleshooting tips:');
+    console.log('1. Check if MONGODB_URI is correctly set in environment variables');
+    console.log('2. For Atlas: Ensure your IP is whitelisted in MongoDB Atlas');
+    console.log('3. For Atlas: Check your username/password in connection string');
+    console.log('4. For local: Make sure MongoDB is running on localhost:27017');
+    process.exit(1);
+  }
+};
+
+// Initialize database connection
+connectDB();
+
+// Routes
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/users', require('./routes/users'));
 app.use('/api/groups', require('./routes/groups'));
@@ -65,7 +92,7 @@ app.use('/api/announcements', require('./routes/announcements'));
 app.use('/api/events', require('./routes/events'));
 app.use('/api/notifications', require('./routes/notifications'));
 
-// Initialize Socket.IO after routes
+// Initialize Socket.IO
 const io = socketIO(server, {
   cors: corsOptions,
   pingTimeout: 60000,
@@ -85,7 +112,6 @@ io.on('connection', (socket) => {
   });
 
   socket.on('send_message', (message) => {
-    // Broadcast message to appropriate room
     socket.broadcast.emit('new_message', message);
   });
 
@@ -94,14 +120,19 @@ io.on('connection', (socket) => {
   });
 });
 
-// Enhanced health check endpoint
+// Health check endpoint
 app.get('/api/health', (req, res) => {
-  const dbStatus = mongoose.connection.readyState === 1 ? 'connected' : 'disconnected';
+  const dbStatus = mongoose.connection.readyState;
+  const statusMap = {
+    0: 'disconnected',
+    1: 'connected',
+    2: 'connecting',
+    3: 'disconnecting'
+  };
   
   res.status(200).json({ 
     status: 'OK', 
-    message: 'CampusConnect API is running!',
-    database: dbStatus,
+    database: statusMap[dbStatus] || 'unknown',
     timestamp: new Date().toISOString(),
     environment: process.env.NODE_ENV || 'development'
   });
@@ -138,7 +169,6 @@ const PORT = process.env.PORT || 5000;
 
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Server running on port ${PORT}`);
-  console.log(`📚 CampusConnect Backend API Active`);
   console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
   console.log(`🔗 Health check: http://localhost:${PORT}/api/health`);
 });

@@ -593,7 +593,7 @@ app.get('/', (req, res) => {
 // Socket.IO setup
 const io = socketIO(server, {
   cors: {
-    origin: ['https://campus-connect1-beta.vercel.app', 'http://localhost:3000'],
+    origin: ['https://campus-connect2-pi.vercel.app/?', 'http://localhost:3000'],
     methods: ['GET', 'POST']
   }
 });
@@ -642,5 +642,5 @@ server.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
   console.log(`🔗 Health check: http://localhost:${PORT}/api/health`);
-  console.log(`🎯 Frontend: https://campus-connect1-beta.vercel.app`);
+  console.log(`🎯 Frontend: https://campus-connect2-pi.vercel.app`);
 });

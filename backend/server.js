@@ -14,7 +14,7 @@ const server = http.createServer(app);
 // CORS configuration
 app.use(cors({
   origin: [
-    'https://campus-connect1-beta.vercel.app',
+    'https://campus-connect2-pi.vercel.app/',
     'http://localhost:3000'
   ],
   credentials: true

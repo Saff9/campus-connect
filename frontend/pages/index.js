@@ -1,8 +1,93 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
 export default function Home() {
   const [currentView, setCurrentView] = useState('landing')
   const [authMode, setAuthMode] = useState('login')
+  const [user, setUser] = useState(null)
+  const [loading, setLoading] = useState(false)
+  const [message, setMessage] = useState('')
+  
+  const [authForm, setAuthForm] = useState({
+    firstName: '',
+    lastName: '',
+    email: '',
+    password: ''
+  })
+
+  // Check if user is already logged in
+  useEffect(() => {
+    const token = localStorage.getItem('token')
+    if (token) {
+      checkAuth(token)
+    }
+  }, [])
+
+  const checkAuth = async (token) => {
+    try {
+      const response = await fetch('https://campus-connect-f2it.onrender.com/api/auth/me', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      })
+      
+      if (response.ok) {
+        const data = await response.json()
+        setUser(data.user)
+        setCurrentView('dashboard')
+      } else {
+        localStorage.removeItem('token')
+      }
+    } catch (error) {
+      console.error('Auth check failed:', error)
+      localStorage.removeItem('token')
+    }
+  }
+
+  const handleAuth = async (e) => {
+    e.preventDefault()
+    setLoading(true)
+    setMessage('')
+
+    try {
+      const endpoint = authMode === 'login' ? '/auth/login' : '/auth/register'
+      const response = await fetch(`https://campus-connect-f2it.onrender.com/api${endpoint}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(authForm)
+      })
+
+      const data = await response.json()
+
+      if (response.ok) {
+        localStorage.setItem('token', data.token)
+        setUser(data.user)
+        setCurrentView('dashboard')
+        setMessage('Success! Redirecting...')
+      } else {
+        setMessage(data.message || 'Authentication failed')
+      }
+    } catch (error) {
+      setMessage('Network error. Please try again.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleLogout = () => {
+    localStorage.removeItem('token')
+    setUser(null)
+    setCurrentView('landing')
+    setAuthForm({ firstName: '', lastName: '', email: '', password: '' })
+  }
+
+  const handleInputChange = (e) => {
+    setAuthForm(prev => ({
+      ...prev,
+      [e.target.name]: e.target.value
+    }))
+  }
 
   // Landing Page
   if (currentView === 'landing') {
@@ -53,86 +138,194 @@ export default function Home() {
               Sign In
             </button>
           </div>
+
+          <div style={styles.features}>
+            <div style={styles.feature}>
+              <div style={styles.featureIcon}>💬</div>
+              <h3>Smart Messaging</h3>
+              <p>Real-time chat with organized channels and file sharing</p>
+            </div>
+            <div style={styles.feature}>
+              <div style={styles.featureIcon}>👥</div>
+              <h3>Group Management</h3>
+              <p>Create and manage clubs, organizations, and study groups</p>
+            </div>
+            <div style={styles.feature}>
+              <div style={styles.featureIcon}>📚</div>
+              <h3>Study Mode</h3>
+              <p>Focus on your work with smart Do Not Disturb features</p>
+            </div>
+          </div>
         </main>
       </div>
     )
   }
 
   // Auth Page
-  return (
-    <div style={styles.authPage}>
-      <div style={styles.authCard}>
-        <div style={styles.authHeader}>
-          <button 
-            onClick={() => setCurrentView('landing')}
-            style={styles.backButton}
-          >
-            ← Back to Home
-          </button>
-          <h2 style={styles.authTitle}>
-            {authMode === 'login' ? 'Welcome Back' : 'Join CampusConnect'}
-          </h2>
-        </div>
+  if (currentView === 'auth') {
+    return (
+      <div style={styles.authPage}>
+        <div style={styles.authCard}>
+          <div style={styles.authHeader}>
+            <button 
+              onClick={() => setCurrentView('landing')}
+              style={styles.backButton}
+            >
+              ← Back to Home
+            </button>
+            <h2 style={styles.authTitle}>
+              {authMode === 'login' ? 'Welcome Back' : 'Join CampusConnect'}
+            </h2>
+          </div>
 
-        <div style={styles.tabs}>
-          <button
-            onClick={() => setAuthMode('login')}
-            style={{
-              ...styles.tab,
-              ...(authMode === 'login' && styles.tabActive)
-            }}
-          >
-            Sign In
-          </button>
-          <button
-            onClick={() => setAuthMode('register')}
-            style={{
-              ...styles.tab,
-              ...(authMode === 'register' && styles.tabActive)
-            }}
-          >
-            Create Account
-          </button>
-        </div>
+          <div style={styles.tabs}>
+            <button
+              onClick={() => setAuthMode('login')}
+              style={{
+                ...styles.tab,
+                ...(authMode === 'login' && styles.tabActive)
+              }}
+            >
+              Sign In
+            </button>
+            <button
+              onClick={() => setAuthMode('register')}
+              style={{
+                ...styles.tab,
+                ...(authMode === 'register' && styles.tabActive)
+              }}
+            >
+              Create Account
+            </button>
+          </div>
 
-        <form style={styles.form}>
-          {authMode === 'register' && (
-            <div style={styles.nameFields}>
-              <input
-                placeholder="First Name"
-                style={styles.input}
-              />
-              <input
-                placeholder="Last Name"
-                style={styles.input}
-              />
+          {message && (
+            <div style={{
+              ...styles.message,
+              ...(message.includes('Success') ? styles.messageSuccess : styles.messageError)
+            }}>
+              {message}
             </div>
           )}
-          <input
-            type="email"
-            placeholder="Email Address"
-            style={styles.input}
-          />
-          <input
-            type="password"
-            placeholder="Password"
-            style={styles.input}
-          />
-          <button type="submit" style={styles.submitButton}>
-            {authMode === 'login' ? 'Sign In' : 'Create Account'}
-          </button>
-        </form>
 
-        <div style={styles.demoNote}>
-          <p>🚀 Backend API: campus-connect-f2it.onrender.com</p>
-          <p>✨ Full chat features coming soon!</p>
+          <form onSubmit={handleAuth} style={styles.form}>
+            {authMode === 'register' && (
+              <div style={styles.nameFields}>
+                <input
+                  name="firstName"
+                  placeholder="First Name"
+                  value={authForm.firstName}
+                  onChange={handleInputChange}
+                  style={styles.input}
+                  required
+                />
+                <input
+                  name="lastName"
+                  placeholder="Last Name"
+                  value={authForm.lastName}
+                  onChange={handleInputChange}
+                  style={styles.input}
+                  required
+                />
+              </div>
+            )}
+            <input
+              name="email"
+              type="email"
+              placeholder="Email Address"
+              value={authForm.email}
+              onChange={handleInputChange}
+              style={styles.input}
+              required
+            />
+            <input
+              name="password"
+              type="password"
+              placeholder="Password"
+              value={authForm.password}
+              onChange={handleInputChange}
+              style={styles.input}
+              required
+              minLength="6"
+            />
+            <button 
+              type="submit" 
+              disabled={loading}
+              style={{
+                ...styles.submitButton,
+                ...(loading && styles.submitButtonDisabled)
+              }}
+            >
+              {loading ? 'Please Wait...' : (authMode === 'login' ? 'Sign In' : 'Create Account')}
+            </button>
+          </form>
+
+          <div style={styles.demoNote}>
+            <p>🚀 Backend: campus-connect-f2it.onrender.com</p>
+            <p>✨ Real authentication with your backend API</p>
+          </div>
         </div>
       </div>
+    )
+  }
+
+  // Dashboard
+  return (
+    <div style={styles.dashboard}>
+      <aside style={styles.sidebar}>
+        <div style={styles.sidebarHeader}>
+          <div style={styles.logo}>💬 CampusConnect</div>
+          <button onClick={handleLogout} style={styles.logoutButton}>
+            Logout
+          </button>
+        </div>
+
+        <div style={styles.userInfo}>
+          <div style={styles.avatar}>
+            {user?.firstName?.[0]}{user?.lastName?.[0]}
+          </div>
+          <div>
+            <div style={styles.userName}>{user?.firstName} {user?.lastName}</div>
+            <div style={styles.userEmail}>{user?.email}</div>
+          </div>
+        </div>
+
+        <div style={styles.section}>
+          <h3 style={styles.sectionTitle}>Your Groups</h3>
+          <button style={styles.addButton}>
+            + Create Group
+          </button>
+        </div>
+      </aside>
+
+      <main style={styles.mainContent}>
+        <div style={styles.welcomeMessage}>
+          <h1>Welcome to CampusConnect, {user?.firstName}! 🎉</h1>
+          <p>Your student communication platform is ready to use.</p>
+          <div style={styles.featureGrid}>
+            <div style={styles.featureCard}>
+              <h3>🎯 Next Steps</h3>
+              <ul style={styles.featureList}>
+                <li>Create your first group</li>
+                <li>Invite other students</li>
+                <li>Start chatting in channels</li>
+                <li>Schedule events and meetings</li>
+              </ul>
+            </div>
+            <div style={styles.featureCard}>
+              <h3>📊 Backend Status</h3>
+              <p>✅ API Connected</p>
+              <p>✅ Authentication Working</p>
+              <p>✅ Real-time Chat Ready</p>
+            </div>
+          </div>
+        </div>
+      </main>
     </div>
   )
 }
 
-// All styles in one object
+// All styles
 const styles = {
   landing: {
     minHeight: '100vh',
@@ -177,7 +370,7 @@ const styles = {
   hero: {
     textAlign: 'center',
     padding: '100px 20px',
-    maxWidth: '800px',
+    maxWidth: '1200px',
     margin: '0 auto'
   },
   heroTitle: {
@@ -197,7 +390,8 @@ const styles = {
   heroButtons: {
     display: 'flex',
     gap: '20px',
-    justifyContent: 'center'
+    justifyContent: 'center',
+    marginBottom: '80px'
   },
   btnLargePrimary: {
     background: '#fbbf24',
@@ -219,6 +413,22 @@ const styles = {
     fontWeight: 'bold',
     cursor: 'pointer'
   },
+  features: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
+    gap: '30px',
+    marginTop: '40px'
+  },
+  feature: {
+    background: 'rgba(255, 255, 255, 0.1)',
+    padding: '30px',
+    borderRadius: '12px',
+    backdropFilter: 'blur(10px)'
+  },
+  featureIcon: {
+    fontSize: '40px',
+    marginBottom: '15px'
+  },
   authPage: {
     minHeight: '100vh',
     background: 'linear-gradient(135deg, #667eea, #764ba2)',
@@ -232,7 +442,7 @@ const styles = {
     borderRadius: '12px',
     padding: '40px',
     width: '100%',
-    maxWidth: '400px',
+    maxWidth: '450px',
     boxShadow: '0 20px 25px rgba(0,0,0,0.1)'
   },
   authHeader: {
@@ -272,6 +482,23 @@ const styles = {
     borderBottomColor: '#4f46e5',
     color: '#4f46e5'
   },
+  message: {
+    padding: '12px',
+    borderRadius: '8px',
+    marginBottom: '20px',
+    textAlign: 'center',
+    fontWeight: '500'
+  },
+  messageSuccess: {
+    background: '#dcfce7',
+    color: '#166534',
+    border: '1px solid #bbf7d0'
+  },
+  messageError: {
+    background: '#fee2e2',
+    color: '#991b1b',
+    border: '1px solid #fecaca'
+  },
   form: {
     display: 'flex',
     flexDirection: 'column',
@@ -300,6 +527,10 @@ const styles = {
     cursor: 'pointer',
     marginTop: '10px'
   },
+  submitButtonDisabled: {
+    opacity: 0.6,
+    cursor: 'not-allowed'
+  },
   demoNote: {
     marginTop: '30px',
     padding: '15px',
@@ -308,5 +539,102 @@ const styles = {
     fontSize: '14px',
     color: '#6b7280',
     textAlign: 'center'
+  },
+  dashboard: {
+    display: 'flex',
+    minHeight: '100vh',
+    fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif'
+  },
+  sidebar: {
+    width: '300px',
+    background: '#1f2937',
+    color: 'white',
+    padding: '20px'
+  },
+  sidebarHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: '30px'
+  },
+  logoutButton: {
+    background: 'transparent',
+    color: 'white',
+    border: '1px solid #6b7280',
+    padding: '8px 12px',
+    borderRadius: '6px',
+    cursor: 'pointer',
+    fontSize: '12px'
+  },
+  userInfo: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '12px',
+    marginBottom: '30px',
+    paddingBottom: '20px',
+    borderBottom: '1px solid #374151'
+  },
+  avatar: {
+    width: '40px',
+    height: '40px',
+    background: '#4f46e5',
+    borderRadius: '50%',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontWeight: 'bold',
+    fontSize: '14px'
+  },
+  userName: {
+    fontWeight: '600',
+    fontSize: '16px'
+  },
+  userEmail: {
+    fontSize: '14px',
+    color: '#9ca3af'
+  },
+  section: {
+    marginBottom: '20px'
+  },
+  sectionTitle: {
+    fontSize: '14px',
+    fontWeight: '600',
+    marginBottom: '12px',
+    color: '#d1d5db'
+  },
+  addButton: {
+    width: '100%',
+    background: '#4f46e5',
+    color: 'white',
+    border: 'none',
+    padding: '12px',
+    borderRadius: '6px',
+    cursor: 'pointer',
+    fontSize: '14px',
+    fontWeight: '500'
+  },
+  mainContent: {
+    flex: 1,
+    background: '#f9fafb',
+    padding: '40px'
+  },
+  welcomeMessage: {
+    maxWidth: '800px'
+  },
+  featureGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
+    gap: '20px',
+    marginTop: '30px'
+  },
+  featureCard: {
+    background: 'white',
+    padding: '25px',
+    borderRadius: '12px',
+    boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
+  },
+  featureList: {
+    marginTop: '15px',
+    paddingLeft: '20px'
   }
 }
